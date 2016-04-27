@@ -144,7 +144,6 @@ class Model(Parameterized):
                 print("Using float32 hack for Tensorflow optimizers...")
                 float32_hack = True
 
-
         self._free_vars = tf.Variable(self.get_free_state())
         if float32_hack:
             self._free_vars32 = tf.Variable(self.get_free_state().astype(np.float32))
@@ -157,6 +156,7 @@ class Model(Parameterized):
 
         self._minusF = tf.neg( f, name = 'objective' )
         self._minusG = tf.neg( g, name = 'grad_objective' )
+
         # The optimiser needs to be part of the computational graph, and needs
         # to be initialised before tf.initialise_all_variables() is called.
         if optimizer is None:
@@ -203,7 +203,7 @@ class Model(Parameterized):
         if self._needs_recompile:
             self._compile()
         return hmc.sample_HMC(self._objective, num_samples, Lmax, epsilon, x0=self.get_free_state(), verbose=verbose)
-
+    @profile
     def optimize(self, method='L-BFGS-B', tol=None, callback=None, max_iters=1000, calc_feed_dict=None, **kw):
         """
         Optimize the model by maximizing the likelihood (possibly with the
@@ -269,7 +269,7 @@ class Model(Parameterized):
                            jac=jac,
                            status="Finished iterations.")
         return r
-
+    
     def _optimize_np(self, method='L-BFGS-B', tol=None, callback=None, max_iters=1000, **kw):
         """
         Optimize the model to find the maximum likelihood  or MAP point. Here
