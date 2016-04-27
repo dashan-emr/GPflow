@@ -144,6 +144,7 @@ class Model(Parameterized):
                 print("Using float32 hack for Tensorflow optimizers...")
                 float32_hack = True
 
+
         self._free_vars = tf.Variable(self.get_free_state())
         if float32_hack:
             self._free_vars32 = tf.Variable(self.get_free_state().astype(np.float32))
@@ -156,7 +157,6 @@ class Model(Parameterized):
 
         self._minusF = tf.neg( f, name = 'objective' )
         self._minusG = tf.neg( g, name = 'grad_objective' )
-
         # The optimiser needs to be part of the computational graph, and needs
         # to be initialised before tf.initialise_all_variables() is called.
         if optimizer is None:
