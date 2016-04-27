@@ -2,7 +2,7 @@ import numpy as np
 from tf_hacks import eye
 import tensorflow as tf
 
-def conditional(Xnew, X, kern, f, num_columns, full_cov=False, q_sqrt=None, whiten=False):
+def conditional(Xnew, X, kern, f, num_columns, full_cov=False, q_sqrt=None, whiten=False, precomp_dist=False, dX_Xnew=None,dX_X=None):
     """
     Given F, representing the GP at the points X, produce the mean and
     (co-)variance of the GP at the points Xnew.
@@ -43,8 +43,13 @@ def conditional(Xnew, X, kern, f, num_columns, full_cov=False, q_sqrt=None, whit
 
     #compute kernel stuff
     num_data = tf.shape(X)[0]
-    Kmn = kern.K(X, Xnew)
-    Kmm = kern.K(X) + eye(num_data)*1e-6
+    if precomp_dist:
+        Kmn = kern.K_precompd(dX_Xnew)
+        Kmm = kern.K_precompd(dX_X) + eye(num_data)*1e-6
+    else:
+        Kmn = kern.K(X, Xnew)
+        Kmm = kern.K(X) + eye(num_data)*1e-6
+
     Lm = tf.cholesky(Kmm)
 
     #Compute the projection matrix A
@@ -72,7 +77,7 @@ def conditional(Xnew, X, kern, f, num_columns, full_cov=False, q_sqrt=None, whit
             if q_sqrt.get_shape().ndims==2:
                 LTA = A*q_sqrt[:,d:d+1]
             elif q_sqrt.get_shape().ndims==3:
-                L = tf.batch_matrix_band_part(q_sqrt[:,:,d], -1, 0)
+                L = tf.user_ops.triangle(q_sqrt[:,:,d], 'lower')
                 LTA = tf.matmul(tf.transpose(L), A)
             else: # pragma no cover
                 raise ValueError, "Bad dimension for q_sqrt: %s"%str(q_sqrt.get_shape().ndims)
@@ -91,9 +96,10 @@ def gp_predict(Xnew, X, kern, F, full_cov=False):
     warnings.warn('gp_predict is deprecated: use conditonal(...) instead', DeprecationWarning)
     return conditional(Xnew, X, kern, F, num_columns=1, full_cov=full_cov, q_sqrt=None, whiten=False)
 
-def gaussian_gp_predict(Xnew, X, kern, q_mu, q_sqrt, num_columns, full_cov=False):
+def gaussian_gp_predict(Xnew, X, kern, q_mu, q_sqrt, num_columns, full_cov=False, precomp_dist=False, dX_Xnew=None,dX_X=None):
     warnings.warn('gp_predict is deprecated: use conditonal(...) instead', DeprecationWarning)
-    return conditional(Xnew, X, kern, q_mu, num_columns=num_columns, full_cov=full_cov, q_sqrt=q_sqrt, whiten=False)
+    return conditional(Xnew, X, kern, q_mu, num_columns=num_columns, full_cov=full_cov, q_sqrt=q_sqrt, whiten=False,
+                       precomp_dist=precomp_dist, dX_Xnew=dX_Xnew,dX_X=dX_X)
 
 def gaussian_gp_predict_whitened(Xnew, X, kern, q_mu, q_sqrt, num_columns, full_cov=False):
     warnings.warn('gp_predict is deprecated: use conditonal(...) instead', DeprecationWarning)

@@ -3,6 +3,7 @@ from tf_hacks import eye
 import numpy as np
 from param import Param, Parameterized
 import transforms
+import sys
 
 class Kern(Parameterized):
     """
@@ -21,7 +22,9 @@ class Kern(Parameterized):
             self.active_dims = active_dims
 
     def _slice(self, X, X2):
+        print("^^",self.active_dims)
         if isinstance(self.active_dims, slice):
+            print(tf.shape(X),tf.shape(X[:,self.active_dims]))
             X = X[:,self.active_dims]
             if X2 is not None:
                 X2 = X2[:,self.active_dims]
@@ -30,7 +33,7 @@ class Kern(Parameterized):
             X = tf.transpose(tf.pack([X[:,i] for i in self.active_dims]))
             if X2 is not None:
                 X2 = tf.transpose(tf.pack([X2[:,i] for i in self.active_dims]))
-            return X, X2    
+            return X, X2
 
     def __add__(self, other):
         return Add([self, other])
@@ -176,6 +179,7 @@ class Exponential(Stationary):
         return self.variance * tf.exp(-0.5 * r)
 
 
+
 class OU(Stationary):
     """
     The Ornstein Uhlenbeck kernel
@@ -191,10 +195,14 @@ class Matern32(Stationary):
     The Matern 3/2 kernel
     """
     def K(self, X, X2=None):
-        X, X2 = self._slice(X, X2)
+        #X, X2 = self._slice(X, X2)
         r = self.euclid_dist(X, X2)
         return self.variance * (1. + np.sqrt(3.) * r) * tf.exp(-np.sqrt(3.) * r)
 
+    def K_precompd(self, r):
+
+        #r  = r/ self.lengthscales
+        return self.variance * (1. + (np.sqrt(3.)/self.lengthscales) * r) * tf.exp(-(np.sqrt(3.)/self.lengthscales) * r)
 
 class Matern52(Stationary):
     """
