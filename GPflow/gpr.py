@@ -28,11 +28,17 @@ class GPR(GPModel):
             \log p(Y, V | theta).
 
         """
-        K = self.kern.K(self.X) + eye(self.num_data) * self.likelihood.variance
+        with tf.name_scope('kernel'):
+            K = self.kern.K(self.X) + eye(self.num_data) * self.likelihood.variance
+            _ = tf.image_summary('k', tf.expand_dims(tf.expand_dims(tf.cast(K, tf.float32), 2), 0))
         L = tf.cholesky(K)
-        m = self.mean_function(self.X)
+        with tf.name_scope('mean_function'):
+            m = self.mean_function(self.X)
 
-        return multivariate_normal(self.Y, m, L)
+        with tf.name_scope('mvn_density'):
+            log_lik = multivariate_normal(self.Y, m, L)
+
+        return log_lik
 
     def build_predict(self, Xnew, full_cov=False):
         """
