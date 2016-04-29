@@ -248,10 +248,11 @@ class Model(Parameterized):
         Optimize the model using a tensorflow optimizer. see self.optimize()
         """
         opt_step = self._compile(optimizer=method)
+        print ("the objective arryay is:")
         tf.scalar_summary('objectiveF', self._minusF)
         print ("summary ops")
         summary_op = tf.merge_all_summaries()
-        summary_writer = tf.train.SummaryWriter(logdir='./logdir', graph=self._session.graph)
+        summary_writer = tf.train.SummaryWriter(logdir='./logdir'), graph=self._session.graph)
         print ("ready to write graph")
         try:
             iteration = 0

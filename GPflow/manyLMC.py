@@ -50,9 +50,11 @@ class ManyLMC(GPflow.model.Model):
         GPflow.model.Model.__init__(self,name = 'ManyLMC')
         self.mean_function_list = [mean_function]* self.num_latent
         if whiten_list is None: whiten_list = [False] * self.num_latent
-        if q_diag_list is None: q_diag_list = [False] * self.num_latent
-        print "chk",num_inducing_points
-        self.q_diag_list,self.whiten_list,self.id_list = q_diag_list, whiten_list,id_list
+        else: white_list = [white_list] *self.num_latent
+        if q_diag_list is None: diag_list = [False] * self.num_latent
+        else:diag_list = [q_diag_list] * self.num_latent
+        # print "chk",num_inducing_points
+        self.q_diag_list,self.whiten_list,self.id_list = diag_list, whiten_list,id_list
         self.X, self.Y = list(),list()
         
         """
@@ -143,10 +145,9 @@ class ManyLMC(GPflow.model.Model):
         self.num_latent_shared = np.sum(self.num_latent_list,dtype = np.int64)
         self.W = Param(np.random.randn(self.num_tasks,self.num_latent_shared))  #dim n * m, and we assume W is shared accorss the patients.
         self.Kappa = Param(np.random.randn(self.num_tasks*self.num_patients,1))  #dim (n *m)* 1 n is number of tasks and m is number of patients
-        self.laggings = Param(np.random.randn(self.num_tasks-1,1))
+        self.lagging = Param(np.random.randn(self.num_tasks-1,1))
         if fixed_inducing_points:
             self.Z.fixed = True
-
     def square_dist(self, X, X2):
         X = X
         Xs = np.sum(np.square(X), 1)
@@ -212,7 +213,7 @@ class ManyLMC(GPflow.model.Model):
         as the weighted sum of loglike of latent function.
         """
         #Get prior KL.
-        print(type(self.X[0]))
+        #print(type(self.X[0]))
         sys.stdout.flush()
         KL,loglike  = self.build_prior_KL(),0
         #Get conditionals

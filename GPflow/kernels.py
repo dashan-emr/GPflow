@@ -22,9 +22,9 @@ class Kern(Parameterized):
             self.active_dims = active_dims
 
     def _slice(self, X, X2):
-        print("^^",self.active_dims)
+        #print("^^",self.active_dims)
         if isinstance(self.active_dims, slice):
-            print(tf.shape(X),tf.shape(X[:,self.active_dims]))
+           #print(tf.shape(X),tf.shape(X[:,self.active_dims]))
             X = X[:,self.active_dims]
             if X2 is not None:
                 X2 = X2[:,self.active_dims]

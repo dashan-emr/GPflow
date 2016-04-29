@@ -131,7 +131,7 @@ class Param(Parentable):
         #TODO what about constraints that change the size ??
 
         if self.fixed:
-            self._tf_array = tf.constant(self._array.copy(), dtype=tf.float64)
+            self._tf_array = self._array.copy()
             return 0
         x_free = free_array[:self.size]
         mapped_array = self.transform.tf_forward(x_free)
@@ -392,10 +392,11 @@ class Parameterized(Parentable):
         return ''.join(html) 
 
 
+
 class ParamList(Parameterized):
     """
     A list of parameters. This allows us to store parameters in a list whilst
-    making them 'visible' to the GPflow machinery. 
+    making them 'visible' to the GPflow machinery.
 
     The correct usage is
 
@@ -441,14 +442,22 @@ class ParamList(Parameterized):
 
     def __getitem__(self, key):
         """
-        If tf mode is off, this simply returns the corresponding Param . 
-
+        If tf mode is off, this simply returns the corresponding Param .
         If tf mode is on, all items will appear as their tf
         representations.
         """
         o = self.sorted_params[key]
         if isinstance(o, Param) and self._tf_mode:
             return o._tf_array
+
+        """
+        deal with kernel list , origianl kernel and additive kernel
+        """
+        if isinstance(o,Parameterized) and self._tf_mode:
+            try:
+                for kernel in o.kern_list: kernel._tf_mode = True
+            except AttributeError as e:
+                o._tf_mode = True
         return o
 
     def append(self, item):
