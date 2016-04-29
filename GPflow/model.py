@@ -153,7 +153,8 @@ class Model(Parameterized):
             self._free_vars32 = tf.Variable(self.get_free_state().astype(np.float32))
             self._free_vars = tf.cast(self._free_vars32, tf.float64)
         print ("running time for building free vars in float32_hack is %.3f " %(time.time() - start))
-        self.make_tf_array(self._free_vars)
+        with tf.name_scope('make_params'):
+            self.make_tf_array(self._free_vars)
         start = time.time()
         with self.tf_mode():
             f = self.build_likelihood() + self.build_prior()
@@ -362,7 +363,8 @@ class GPModel(Model):
     data via self.predict_density.
     """
     def __init__(self, X, Y, kern, likelihood, mean_function, name='model'):
-        self.X, self.Y, self.kern, self.likelihood, self.mean_function = X, Y, kern, likelihood, mean_function
+        self.X, self.Y = tf.constant(X, tf.float64, X.shape, 'X'), tf.constant(Y, tf.float64, Y.shape, 'Y')
+        self.kern, self.likelihood, self.mean_function = kern, likelihood, mean_function
         Model.__init__(self, name)
 
     def build_predict(self):
