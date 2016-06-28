@@ -2,6 +2,7 @@ import numpy as np
 import tensorflow as tf
 import transforms
 from contextlib import contextmanager
+import pdb
 
 recompile_keys = ['prior', 'transform', 'fixed'] # when one of these attributes is set, notify a recompilation
 
@@ -115,8 +116,10 @@ class Param(Parentable):
         self.transform = transform
         self.prior = None
         self.fixed = False
+        self.variable_scop = None
+        self.free_array_ind = None
 
-    def make_tf_array(self, free_array):
+    def make_tf_array(self, free_array, strt):
         """
         free_array is a tensorflow vector which will be the optimisation target,
         i.e. it will be free to take any value.
@@ -131,13 +134,18 @@ class Param(Parentable):
         #TODO what about constraints that change the size ??
 
         if self.fixed:
-            self._tf_array = self._array.copy()
-            return 0
+            self._tf_array = tf.constant(self._array.copy(),dtype = tf.float64)
+            return 0,0
         x_free = free_array[:self.size]
         mapped_array = self.transform.tf_forward(x_free)
         self._tf_array = tf.reshape(mapped_array, self.shape)
         self._log_jacobian = self.transform.tf_log_jacobian(x_free)
-        return self.size
+        #print(self.name, strt, strt+self.size)
+        self.free_array_ind = [ind for ind in np.arange(strt, strt+self.size)]
+        return self.size, self.size
+    
+    def reset_params(self):
+        self.fixed = False
 
     def get_free_state(self):
         """
@@ -279,16 +287,24 @@ class Parameterized(Parentable):
             value._parent = self
 
 
-    def make_tf_array(self, X):
+    def make_tf_array(self, X, global_count):
         """
         X is a tf. placeholder. It gets passed to all the children of
         this class (that are Parameterized or Param objects), which then
         construct their tf_array variables from consecutive sections.
         """
         count = 0
+        init_global_count = global_count
+        #print('in',count, global_count)
         for p in self.sorted_params:
-            count += p.make_tf_array(X[count:])
-        return count
+            #print('>',count,p.name,p)
+            t1, t2 = p.make_tf_array(X[count:], global_count)
+            #print('>.',t1,t2)
+            count += t1
+            global_count += t2
+            #print('>>',count, global_count,p.name,p)
+
+        return count, global_count-init_global_count
 
     @property
     def sorted_params(self):
@@ -313,6 +329,13 @@ class Parameterized(Parentable):
         for p in self.sorted_params:
             count += p.set_state(x[count:])
         return count
+        
+    def reset_params(self):
+        """
+        reset all params to be free params
+        """
+        for p in self.sorted_params:
+            p.reset_params()
 
     @contextmanager
     def tf_mode(self):
@@ -449,7 +472,6 @@ class ParamList(Parameterized):
         o = self.sorted_params[key]
         if isinstance(o, Param) and self._tf_mode:
             return o._tf_array
-
         """
         deal with kernel list , origianl kernel and additive kernel
         """

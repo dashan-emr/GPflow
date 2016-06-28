@@ -2,62 +2,49 @@ import numpy as np
 from tf_hacks import eye
 import tensorflow as tf
 
-def conditional(Xnew, X, kern, f, num_columns, full_cov=False, q_sqrt=None, whiten=False, precomp_dist=False, dX_Xnew=None,dX_X=None):
+def conditional(Xnew, X, kern, f, num_columns, full_cov=False, q_sqrt=None, whiten=False):
     """
     Given F, representing the GP at the points X, produce the mean and
     (co-)variance of the GP at the points Xnew.
-
     Additionally, there my be Gaussian uncertainty about F as represented by
     q_sqrt. In this case `f` representes the mean of the distribution and
     q_sqrt the square-root of the covariance.
-
     Additionally, the GP may have been centered (whitened) so that 
         p(v) = N( 0, I)
         f = L v
     thus
         p(f) = N(0, LL^T) = N(0, K).
     in this case 'f' represents the values taken by v. 
-
     The method can either return the diagonals of the covariance matrix for
     each output of the full covariance matrix (full_cov). 
-
     We assume K independent GPs, represented by the columns of f (and the
     last ax of q_sqrt).  
-
     Xnew is a data matrix, size N x D
     X are data points, size M x D
     kern is a GPflow kernel
     f is a data matrix, M x K, represensting the function values at X.
     num_columns is an interger number of columns in the f matrix (must match q_sqrt's last dimension)
-    (optional) q_sqrt is a matrix of standard-deviations or Cholesky matrices, size M x K or M x M x K
+    (optional) q_sqrt is a matrix of standard-deviations or Cholesky matrices, size M x K or M x M x K   M is #inducing points and K is #latentfun
     (optional) whiten is a boolean: whether to whiten the representation as described above. 
-
-
     These functions are now considered deprecated, subsumed into this one function:
         gp_predict
         gaussian_gp_predict
         gp_predict_whitened
         gaussian_gp_predict_whitened
-
     """
 
     #compute kernel stuff
     num_data = tf.shape(X)[0]
-    if precomp_dist:
-        Kmn = kern.K_precompd(dX_Xnew)
-        Kmm = kern.K_precompd(dX_X) + eye(num_data)*1e-6
-    else:
-        Kmn = kern.K(X, Xnew)
-        Kmm = kern.K(X) + eye(num_data)*1e-6
-
+    Kmn = kern.K(X, Xnew) # dim (M*D)*(D*N)
+    Kmm = kern.K(X) + eye(num_data)*1e-6
     Lm = tf.cholesky(Kmm)
 
     #Compute the projection matrix A
-    A = tf.matrix_triangular_solve(Lm, Kmn, lower=True)
+    A = tf.matrix_triangular_solve(Lm, Kmn, lower=True) #m*n
 
     #compute the covariance due to the conditioning
     if full_cov:
-        fvar = kern.K(Xnew) - tf.matmul(tf.transpose(A), A)
+        fvar = kern.K(Xnew) - tf.matmul(tf.transpose(A), A) #n*n
         fvar = tf.tile(tf.expand_dims(fvar, 2), [1, 1, num_columns])
     else:
         fvar = kern.Kdiag(Xnew) - tf.reduce_sum(tf.square(A), 0)
@@ -68,7 +55,7 @@ def conditional(Xnew, X, kern, f, num_columns, full_cov=False, q_sqrt=None, whit
         A = tf.matrix_triangular_solve(tf.transpose(Lm), A, lower=False)
 
     #construct the conditional mean 
-    fmean = tf.matmul(tf.transpose(A), f)
+    fmean = tf.matmul(tf.transpose(A), f)  #f is #inducingPoints * #latent_funs = #n*m (m*num_latent)
 
     #add extra projected variance from q(f) if needed
     if q_sqrt is not None:
@@ -96,10 +83,9 @@ def gp_predict(Xnew, X, kern, F, full_cov=False):
     warnings.warn('gp_predict is deprecated: use conditonal(...) instead', DeprecationWarning)
     return conditional(Xnew, X, kern, F, num_columns=1, full_cov=full_cov, q_sqrt=None, whiten=False)
 
-def gaussian_gp_predict(Xnew, X, kern, q_mu, q_sqrt, num_columns, full_cov=False, precomp_dist=False, dX_Xnew=None,dX_X=None):
+def gaussian_gp_predict(Xnew, X, kern, q_mu, q_sqrt, num_columns, full_cov=False):
     warnings.warn('gp_predict is deprecated: use conditonal(...) instead', DeprecationWarning)
-    return conditional(Xnew, X, kern, q_mu, num_columns=num_columns, full_cov=full_cov, q_sqrt=q_sqrt, whiten=False,
-                       precomp_dist=precomp_dist, dX_Xnew=dX_Xnew,dX_X=dX_X)
+    return conditional(Xnew, X, kern, q_mu, num_columns=num_columns, full_cov=full_cov, q_sqrt=q_sqrt, whiten=False)
 
 def gaussian_gp_predict_whitened(Xnew, X, kern, q_mu, q_sqrt, num_columns, full_cov=False):
     warnings.warn('gp_predict is deprecated: use conditonal(...) instead', DeprecationWarning)
@@ -108,6 +94,5 @@ def gaussian_gp_predict_whitened(Xnew, X, kern, q_mu, q_sqrt, num_columns, full_
 def gp_predict_whitened(Xnew, X, kern, V, full_cov=False):
     warnings.warn('gp_predict is deprecated: use conditonal(...) instead', DeprecationWarning)
     return conditional(Xnew, X, kern, V, num_columns=1, full_cov=full_cov, q_sqrt=None, whiten=True)
-
 
 

@@ -80,6 +80,6 @@ class Log1pe(Transform):
     def __str__(self):
         return '+ve'
 
-positive = Log1pe()
+positive = Exp()
 
 

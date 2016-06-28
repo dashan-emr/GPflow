@@ -3,13 +3,11 @@ from tf_hacks import eye
 import numpy as np
 from param import Param, Parameterized
 import transforms
-import sys
 
 class Kern(Parameterized):
     """
     The basic kernel class. Handles input_dim and active dims, and provides a
     generic '_slice' function to implement them.
-
     input dim is an integer
     active dims is a (slice | iterable of integers | None)
     """
@@ -22,9 +20,7 @@ class Kern(Parameterized):
             self.active_dims = active_dims
 
     def _slice(self, X, X2):
-        #print("^^",self.active_dims)
         if isinstance(self.active_dims, slice):
-           #print(tf.shape(X),tf.shape(X[:,self.active_dims]))
             X = X[:,self.active_dims]
             if X2 is not None:
                 X2 = X2[:,self.active_dims]
@@ -33,7 +29,7 @@ class Kern(Parameterized):
             X = tf.transpose(tf.pack([X[:,i] for i in self.active_dims]))
             if X2 is not None:
                 X2 = tf.transpose(tf.pack([X2[:,i] for i in self.active_dims]))
-            return X, X2
+            return X, X2    
 
     def __add__(self, other):
         return Add([self, other])
@@ -80,9 +76,7 @@ class Bias(Static):
 class Stationary(Kern):
     """
     Base class for kernels that are statinoary, that is, they only depend on 
-
         r = || x - x' ||
-
     This class handles 'ARD' behaviour, which stands for 'Automatic Relevance
     Determination'. This means that the kernel has one lengthscale per
     dimension, otherwise the kernel is isotropic (has a single lengthscale). 
@@ -179,7 +173,6 @@ class Exponential(Stationary):
         return self.variance * tf.exp(-0.5 * r)
 
 
-
 class OU(Stationary):
     """
     The Ornstein Uhlenbeck kernel
@@ -195,14 +188,10 @@ class Matern32(Stationary):
     The Matern 3/2 kernel
     """
     def K(self, X, X2=None):
-        #X, X2 = self._slice(X, X2)
+        X, X2 = self._slice(X, X2)
         r = self.euclid_dist(X, X2)
         return self.variance * (1. + np.sqrt(3.) * r) * tf.exp(-np.sqrt(3.) * r)
 
-    def K_precompd(self, r):
-
-        #r  = r/ self.lengthscales
-        return self.variance * (1. + (np.sqrt(3.)/self.lengthscales) * r) * tf.exp(-(np.sqrt(3.)/self.lengthscales) * r)
 
 class Matern52(Stationary):
     """
@@ -228,9 +217,7 @@ def make_kernel_names(kern_list):
     """
     Take a list of kernels and return a list of strings, giving each kernel a
     unique name.
-
     Each name is made from the lower-case version of the kernel's class name. 
-
     Duplicate kernels are given training numbers.
     """
     names = []
@@ -255,7 +242,6 @@ def make_kernel_names(kern_list):
 class Combination(Kern):
     """
     Combine  a list of kernels, e.g. by adding or multiplying (see inherriting classes).
-
     The names of the kernels to be combined are generated from their class names.
     """
     def __init__(self, kern_list):
@@ -289,6 +275,4 @@ class Prod(Combination):
 
     def Kdiag(self, X):
         return reduce(tf.mul, [k.Kdiag(X) for k in self.kern_list])
-
-
 

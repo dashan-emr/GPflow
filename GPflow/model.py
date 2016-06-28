@@ -5,7 +5,6 @@ import numpy as np
 import tensorflow as tf
 import hmc
 import sys
-import time
 
 class ObjectiveWrapper(object):
     """
@@ -74,7 +73,7 @@ class AutoFlow:
             graph_name = '_' + tf_method.__name__ + '_graph'
             if not hasattr(instance, graph_name):
                 with instance.tf_mode():
-                    instance.make_tf_array(instance._free_vars)
+                    instance.make_tf_array(instance._free_vars, 0)
                     graph = tf_method(instance, *self.tf_args)
                     setattr(instance, graph_name, graph)
             feed_dict = dict(zip(self.tf_args, np_args))
@@ -146,23 +145,17 @@ class Model(Parameterized):
                 float32_hack = True
 
         self._free_vars = tf.Variable(self.get_free_state())
-
-        ## why not convert to tf.float64 directly
-        start = time.time()
         if float32_hack:
             self._free_vars32 = tf.Variable(self.get_free_state().astype(np.float32))
             self._free_vars = tf.cast(self._free_vars32, tf.float64)
-        print ("running time for building free vars in float32_hack is %.3f " %(time.time() - start))
-        with tf.name_scope('make_params'):
-            self.make_tf_array(self._free_vars)
-        start = time.time()
+
+        self.make_tf_array(self._free_vars)
         with self.tf_mode():
             f = self.build_likelihood() + self.build_prior()
             g, = tf.gradients(f, self._free_vars)
-        print ("running time for building objective and gradient is: %.3f seconds" % (time.time() - start))   
+
         self._minusF = tf.neg( f, name = 'objective' )
         self._minusG = tf.neg( g, name = 'grad_objective' )
-        del f; del g
 
         # The optimiser needs to be part of the computational graph, and needs
         # to be initialised before tf.initialise_all_variables() is called.
@@ -210,7 +203,7 @@ class Model(Parameterized):
         if self._needs_recompile:
             self._compile()
         return hmc.sample_HMC(self._objective, num_samples, Lmax, epsilon, x0=self.get_free_state(), verbose=verbose)
-
+    #@profile
     def optimize(self, method='L-BFGS-B', tol=None, callback=None, max_iters=1000, calc_feed_dict=None, **kw):
         """
         Optimize the model by maximizing the likelihood (possibly with the
@@ -249,12 +242,7 @@ class Model(Parameterized):
         Optimize the model using a tensorflow optimizer. see self.optimize()
         """
         opt_step = self._compile(optimizer=method)
-        print ("the objective arryay is:")
-        tf.scalar_summary('objectiveF', self._minusF)
-        print ("summary ops")
-        summary_op = tf.merge_all_summaries()
-        summary_writer = tf.train.SummaryWriter(logdir='./logdir'), graph=self._session.graph)
-        print ("ready to write graph")
+
         try:
             iteration = 0
             while iteration < max_iters:
@@ -262,12 +250,7 @@ class Model(Parameterized):
                     feed_dict = {}
                 else:
                     feed_dict = calc_feed_dict()
-                
-                #start = time.time()    
-                _, summary = self._session.run([opt_step,summary_op], feed_dict=feed_dict)
-                #tf.Print(tmp_array,[tmp_array])
-                #print ("running time for this iteratoin is: %.3f seconds" % (time.time() - start))
-                summary_writer.add_summary(summary, global_step=None)
+                self._session.run(opt_step, feed_dict=feed_dict)
                 if callback is not None:
                     callback(self._session.run(self._free_vars))
                 iteration += 1
@@ -275,18 +258,18 @@ class Model(Parameterized):
             print("Caught KeyboardInterrupt, setting model with most recent state.")
             self.set_state(self._session.run(self._free_vars))
             return None
+
         final_x = self._session.run(self._free_vars)
         self.set_state(final_x)
         fun, jac = self._objective(final_x)
-        r  = OptimizeResult(x=final_x,
+        r = OptimizeResult(x=final_x,
                            success=True,
                            message="Finished iterations.",
                            fun=fun,
                            jac=jac,
                            status="Finished iterations.")
-       
         return r
-
+    
     def _optimize_np(self, method='L-BFGS-B', tol=None, callback=None, max_iters=1000, **kw):
         """
         Optimize the model to find the maximum likelihood  or MAP point. Here
@@ -324,7 +307,6 @@ class Model(Parameterized):
         #here's the actual cll to minimize. cathc keyboard errors as harmless.
         obj = ObjectiveWrapper(self._objective)
         try:
-            start  = time.time()
             result = minimize(fun=obj,
                         x0=self.get_free_state(),
                         method=method,
@@ -332,7 +314,6 @@ class Model(Parameterized):
                         tol=tol,
                         callback=callback,
                         options=options)
-            print ("running time for np minimize is %.3f seconds" % (time.time() - start))
         except (KeyboardInterrupt):
             print("Caught KeyboardInterrupt, setting model with most recent state.")
             self.set_state(obj._previous_x)
@@ -363,8 +344,7 @@ class GPModel(Model):
     data via self.predict_density.
     """
     def __init__(self, X, Y, kern, likelihood, mean_function, name='model'):
-        self.X, self.Y = tf.constant(X, tf.float64, X.shape, 'X'), tf.constant(Y, tf.float64, Y.shape, 'Y')
-        self.kern, self.likelihood, self.mean_function = kern, likelihood, mean_function
+        self.X, self.Y, self.kern, self.likelihood, self.mean_function = X, Y, kern, likelihood, mean_function
         Model.__init__(self, name)
 
     def build_predict(self):
